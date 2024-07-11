@@ -1,0 +1,13 @@
+torch
+torchvision
+transformers
+diffusers[torch]
+lpips
+Pillow
+numpy
+scikit-learn
+matplotlib
+tqdm
+omegaconf
+tqdm
+PyYAML
