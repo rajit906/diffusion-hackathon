@@ -16,6 +16,7 @@ from dmps.data.dataloader import get_dataloader, get_dataset
 import torchvision.transforms as transforms
 import yaml
 import torch
+import sys
 
 def load_yaml(file_path: str) -> dict:
     with open(file_path) as f:
@@ -35,7 +36,7 @@ method = "outpainting_expand"
 out_path = f"saved_results/{method}"
 Path(out_path).mkdir(parents=True, exist_ok=True)
 diff_methods = ["dps", "dps_dpms"]
-
+torch.set_default_device(device)
 for diff_method in diff_methods:
     diff_path = out_path+"/"+diff_method
     Path(diff_path).mkdir(parents=True, exist_ok=True)
@@ -56,19 +57,24 @@ lamb = [0.5, 1, 1.5]
 n_steps = [100, 300, 500]
 sigmas = [0.01, 0.05, 0.1]
 psnr_results = []
+num_samples = 1
+
 lpips = LPIPS()
 
 # Fixed seed 
 torch.manual_seed(0)
 
+# Num samples
+
+
 for lam in lamb:
     for n_step in n_steps:
         for sigma in sigmas:
             K = [n_step//10, n_step//5, n_step//2]
-            eps_net = load_epsilon_net("celebahq", n_step, device)
+            eps_net = load_epsilon_net("celebahq", n_step, device).to(device)
             for k in K:
                 # Iterate over dataset
-                for method in diff_methods:
+                for diff_method in diff_methods:
             
                     psnr_list = []
                     lpips_list = []
@@ -85,16 +91,18 @@ for lam in lamb:
                         
                         y = y.squeeze(0)
                         y = y + sigma * torch.randn_like(y)
+
                         inverse_problem = (y, degradation_operator, sigma)
 
                         start_time = time.time()
                         
                         # Diffusion methods
                         if diff_method == "dps":
+                            
                             reconstruction = dps(initial_noise, inverse_problem, eps_net)
                         if diff_method == "dps_dpms":
-                            reconstruction = dps_dpms(initial_noise, inverse_problem, eps_net)
                         
+                            reconstruction = dps_dpms(initial_noise, inverse_problem, eps_net)
                         
                         end_time = time.time()
                         exec_time = end_time - start_time
@@ -102,7 +110,7 @@ for lam in lamb:
 
                         psnr = peak_signal_noise_ratio(ref_img[0].cpu().numpy(), reconstruction[0].cpu().numpy())
                         lpips_score = lpips.score(reconstruction.clamp(-1, 1), ref_img)
-                        print('PSNR: {}'.format(psnr), 'LPIPS: {}'.format(lpips))
+                        print('PSNR: {}'.format(psnr), 'LPIPS: {}'.format(lpips_score))
                         
                         psnr_list.append(psnr)
                         lpips_list.append(lpips)
@@ -127,13 +135,11 @@ for lam in lamb:
                     
                         fig.tight_layout()
 
-                        if method == "dps_dpms":
+                        if diff_method == "dps_dpms":
                             fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, k={k}, lpips={round(lpips_score.item(),2)}, time={round(end_time-start_time,2)}")
                             fig.savefig(f"{out_path}/{diff_method}/image_{i}_k_{k}_sigma_{sigma}_nstep_{n_step}.pdf", bbox_inches = 'tight')
 
-                            
-
-                        elif method == "dps":
+                        elif diff_method == "dps":
                             fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, lpips={round(lpips_score.item(),2)}, time={round(end_time-start_time,2)}")
                             fig.savefig(f"{out_path}/{diff_method}/image_{i}_sigma_{sigma}_nstep_{n_step}.pdf", bbox_inches = 'tight')
                     
