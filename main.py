@@ -75,7 +75,9 @@ for lam in lamb:
                     time_list = []
 
                     for i, ref_img in enumerate(loader):
-
+                        
+                        if i == num_samples:
+                            break
         
                         initial_noise = torch.randn((1, 3, 256, 256), device=device)
                         
@@ -86,22 +88,29 @@ for lam in lamb:
                         inverse_problem = (y, degradation_operator, sigma)
 
                         start_time = time.time()
+                        
+                        # Diffusion methods
                         if diff_method == "dps":
                             reconstruction = dps(initial_noise, inverse_problem, eps_net)
                         if diff_method == "dps_dpms":
                             reconstruction = dps_dpms(initial_noise, inverse_problem, eps_net)
+                        
+                        
                         end_time = time.time()
-                        print('DMPS running time: {}'.format(end_time - start_time))
+                        exec_time = end_time - start_time
+                        print('DMPS running time: {}'.format(exec_time))
 
                         psnr = peak_signal_noise_ratio(ref_img[0].cpu().numpy(), reconstruction[0].cpu().numpy())
                         lpips_score = lpips.score(reconstruction.clamp(-1, 1), ref_img)
                         print('PSNR: {}'.format(psnr), 'LPIPS: {}'.format(lpips))
+                        
                         psnr_list.append(psnr)
                         lpips_list.append(lpips)
-                        time_list.append()
+                        time_list.append(exec_time)
 
                         fig, axes = plt.subplots(1, 3)                    
                         
+                        # Reshaping y
                         if method in ["outpainting_expand", "inpainting_middle"]:
                             y_reshaped =  -torch.ones(3 * 256 * 256, device=device)
                             y_reshaped[: y.shape[0]] = y
@@ -117,13 +126,17 @@ for lam in lamb:
                             ax.set_title(title)
                     
                         fig.tight_layout()
-                        fig.show()
 
                         if method == "dps_dpms":
                             fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, k={k}, lpips={round(lpips_score.item(),2)}, time={round(end_time-start_time,2)}")
-                            fig.savefig(f"saved_results/outpainting_expand/dpms_dps/{i}_{k}_{sigma}_{n_step}.pdf", bbox_inches = 'tight')
-                        
+                            fig.savefig(f"{out_path}/{diff_method}/image_{i}_k_{k}_sigma_{sigma}_nstep_{n_step}.pdf", bbox_inches = 'tight')
+
+                            
+
                         elif method == "dps":
                             fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, lpips={round(lpips_score.item(),2)}, time={round(end_time-start_time,2)}")
-                            fig.savefig(f"saved_results/outpainting_expand/dps/{i}_{sigma}_{n_step}.pdf", bbox_inches = 'tight')
+                            fig.savefig(f"{out_path}/{diff_method}/image_{i}_sigma_{sigma}_nstep_{n_step}.pdf", bbox_inches = 'tight')
                     
+                    np.savetxt("{out_path}/{diff_method}/psnr_sigma_{sigma}_nstep_{n_step}.csv", np.asarray(psnr_list), delimiter=",")
+                    np.savetxt("{out_path}/{diff_method}/lpips_sigma_{sigma}_nstep_{n_step}.csv", np.asarray(lpips_list), delimiter=",")
+                    np.savetxt("{out_path}/{diff_method}/time_sigma_{sigma}_nstep_{n_step}.csv", np.asarray(time_list), delimiter=",")
