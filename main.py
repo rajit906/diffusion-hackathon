@@ -1,0 +1,116 @@
+from utils import load_epsilon_net
+from sampling.dps_dpms import dps_dpms
+from sampling.dps import dps
+import itertools
+import time
+import numpy as np
+from dmps.util.img_utils import clip, clear_color, normalize_np
+from skimage.metrics import peak_signal_noise_ratio
+import math
+import os
+from pathlib import Path
+from utils import load_image, display_image
+import matplotlib.pyplot as plt
+from evaluation.perception import LPIPS
+from dmps.data.dataloader import get_dataloader, get_dataset
+import torchvision.transforms as transforms
+import yaml
+import torch
+
+def load_yaml(file_path: str) -> dict:
+    with open(file_path) as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    return config
+
+args = {}
+args['model_config'] = './dmps/configs/model_config.yaml'
+args['diffusion_config'] = './dmps/configs/diffusion_config.yaml'
+args['task_config'] = './dmps/configs/sr4_config.yaml'
+args['gpu'] = 0
+args['save_dir'] = './saved_results'
+args['seed'] = 0
+
+device = "cuda:0"
+method = "outpainting_expand"
+out_path = f"saved_results/{method}"
+Path(out_path).mkdir(parents=True, exist_ok=True)
+diff_methods = ["dps", "dps_dpms"]
+
+for diff_method in diff_methods:
+    Path(out_path).mkdir(parents=True, exist_ok=True)
+
+path_operator = f"./material/degradation_operators/{method}.pt"
+degradation_operator = torch.load(path_operator, map_location=device)
+
+transform = transforms.Compose([transforms.ToTensor(),
+                                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+task_config = load_yaml(args["task_config"])
+data_config = task_config['data']
+
+dataset = get_dataset(**data_config, transforms=transform)
+loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
+
+# Grid
+lamb = [0.5, 1, 1.5]
+n_steps = [100, 300, 500]
+sigmas = [0.01, 0.05, 0.1]
+psnr_results = []
+lpips = LPIPS()
+
+for lam in lamb:
+    for n_step in n_steps:
+        for sigma in sigmas:
+            K = [n_step//10, n_step//5, n_step//2]
+            eps_net = load_epsilon_net("celebahq", n_step, device)
+            for k in K:
+                # Iterate over dataset
+                for i, ref_img in enumerate(loader):
+
+                    for method in diff_methods:
+                            
+                        initial_noise = torch.randn((1, 3, 256, 256), device=device)
+                        
+                        y = degradation_operator.H(ref_img[None].to(device))
+                        
+                        y = y.squeeze(0)
+                        y = y + sigma * torch.randn_like(y)
+                        inverse_problem = (y, degradation_operator, sigma)
+
+                        DMPS_start_time = time.time()
+                        if method == "dps":
+                            reconstruction = dps(initial_noise, inverse_problem, eps_net)
+                        if method == "dps_dpms":
+                            reconstruction = dps_dpms(initial_noise, inverse_problem, eps_net)
+                        DMPS_end_time = time.time()
+                        print('DMPS running time: {}'.format(DMPS_end_time - DMPS_start_time))
+                        psnr = peak_signal_noise_ratio(ref_img[0].cpu().numpy(), reconstruction[0].cpu().numpy())
+                        lpips_score = lpips.score(reconstruction.clamp(-1, 1), ref_img)
+                        psnr_results.append([psnr])
+                        print('PSNR: {}'.format(psnr))
+
+                        fname = str(i).zfill(5) + '.png'
+                        
+                        fig, axes = plt.subplots(1, 3)                    
+                        y_reshaped =  -torch.ones(3 * 256 * 256, device=device)
+                        y_reshaped[: y.shape[0]] = y
+                        y_reshaped = degradation_operator.V(y_reshaped[None])
+                        y_reshaped = y_reshaped.reshape(3, 256, 256)
+
+                        images = (ref_img, y_reshaped, reconstruction[0])
+                        titles = ("original", "degraded", "reconstruction")
+
+                        # display figures
+                        for ax, img, title in zip(axes, images,titles):
+                            display_image(img, ax)
+                            ax.set_title(title)
+                    
+                        fig.tight_layout()
+                        fig.show()
+
+                        if method == "dps_dpms":
+                            fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, k={k}, lpips={round(lpips_score.item(),2)}, time={round(DMPS_end_time-DMPS_start_time,2)}")
+                            fig.savefig(f"saved_results/outpainting_expand/dpms_dps/input/{i}_{k}_{sigma}_{n_step}.pdf", bbox_inches = 'tight')
+                        else:
+                            fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, lpips={round(lpips_score.item(),2)}, time={round(DMPS_end_time-DMPS_start_time,2)}")
+
+                        fig.savefig(f"saved_results/outpainting_expand/dps/input/{i}_{sigma}_{n_step}.pdf", bbox_inches = 'tight')
