@@ -58,6 +58,9 @@ sigmas = [0.01, 0.05, 0.1]
 psnr_results = []
 lpips = LPIPS()
 
+# Fixed seed 
+torch.manual_seed(0)
+
 for lam in lamb:
     for n_step in n_steps:
         for sigma in sigmas:
@@ -65,10 +68,15 @@ for lam in lamb:
             eps_net = load_epsilon_net("celebahq", n_step, device)
             for k in K:
                 # Iterate over dataset
-                for i, ref_img in enumerate(loader):
+                for method in diff_methods:
+            
+                    psnr_list = []
+                    lpips_list = []
+                    time_list = []
 
-                    for method in diff_methods:
-                            
+                    for i, ref_img in enumerate(loader):
+
+        
                         initial_noise = torch.randn((1, 3, 256, 256), device=device)
                         
                         y = degradation_operator.H(ref_img[None].to(device))
@@ -88,9 +96,10 @@ for lam in lamb:
                         psnr = peak_signal_noise_ratio(ref_img[0].cpu().numpy(), reconstruction[0].cpu().numpy())
                         lpips_score = lpips.score(reconstruction.clamp(-1, 1), ref_img)
                         print('PSNR: {}'.format(psnr), 'LPIPS: {}'.format(lpips))
+                        psnr_list.append(psnr)
+                        lpips_list.append(lpips)
+                        time_list.append()
 
-                        fname = str(i).zfill(5) + '.png'
-                        
                         fig, axes = plt.subplots(1, 3)                    
                         
                         if method in ["outpainting_expand", "inpainting_middle"]:
@@ -111,9 +120,10 @@ for lam in lamb:
                         fig.show()
 
                         if method == "dps_dpms":
-                            fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, k={k}, lpips={round(lpips_score.item(),2)}, time={round(DMPS_end_time-DMPS_start_time,2)}")
+                            fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, k={k}, lpips={round(lpips_score.item(),2)}, time={round(end_time-start_time,2)}")
                             fig.savefig(f"saved_results/outpainting_expand/dpms_dps/{i}_{k}_{sigma}_{n_step}.pdf", bbox_inches = 'tight')
                         
                         elif method == "dps":
-                            fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, lpips={round(lpips_score.item(),2)}, time={round(DMPS_end_time-DMPS_start_time,2)}")
+                            fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, lpips={round(lpips_score.item(),2)}, time={round(end_time-start_time,2)}")
                             fig.savefig(f"saved_results/outpainting_expand/dps/{i}_{sigma}_{n_step}.pdf", bbox_inches = 'tight')
+                    
