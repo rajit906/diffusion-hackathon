@@ -37,7 +37,8 @@ Path(out_path).mkdir(parents=True, exist_ok=True)
 diff_methods = ["dps", "dps_dpms"]
 
 for diff_method in diff_methods:
-    Path(out_path).mkdir(parents=True, exist_ok=True)
+    diff_path = out_path+"/"+diff_method
+    Path(diff_path).mkdir(parents=True, exist_ok=True)
 
 path_operator = f"./material/degradation_operators/{method}.pt"
 degradation_operator = torch.load(path_operator, map_location=device)
@@ -76,25 +77,27 @@ for lam in lamb:
                         y = y + sigma * torch.randn_like(y)
                         inverse_problem = (y, degradation_operator, sigma)
 
-                        DMPS_start_time = time.time()
-                        if method == "dps":
+                        start_time = time.time()
+                        if diff_method == "dps":
                             reconstruction = dps(initial_noise, inverse_problem, eps_net)
-                        if method == "dps_dpms":
+                        if diff_method == "dps_dpms":
                             reconstruction = dps_dpms(initial_noise, inverse_problem, eps_net)
-                        DMPS_end_time = time.time()
-                        print('DMPS running time: {}'.format(DMPS_end_time - DMPS_start_time))
+                        end_time = time.time()
+                        print('DMPS running time: {}'.format(end_time - start_time))
+
                         psnr = peak_signal_noise_ratio(ref_img[0].cpu().numpy(), reconstruction[0].cpu().numpy())
                         lpips_score = lpips.score(reconstruction.clamp(-1, 1), ref_img)
-                        psnr_results.append([psnr])
-                        print('PSNR: {}'.format(psnr))
+                        print('PSNR: {}'.format(psnr), 'LPIPS: {}'.format(lpips))
 
                         fname = str(i).zfill(5) + '.png'
                         
                         fig, axes = plt.subplots(1, 3)                    
-                        y_reshaped =  -torch.ones(3 * 256 * 256, device=device)
-                        y_reshaped[: y.shape[0]] = y
-                        y_reshaped = degradation_operator.V(y_reshaped[None])
-                        y_reshaped = y_reshaped.reshape(3, 256, 256)
+                        
+                        if method in ["outpainting_expand", "inpainting_middle"]:
+                            y_reshaped =  -torch.ones(3 * 256 * 256, device=device)
+                            y_reshaped[: y.shape[0]] = y
+                            y_reshaped = degradation_operator.V(y_reshaped[None])
+                            y_reshaped = y_reshaped.reshape(3, 256, 256)
 
                         images = (ref_img, y_reshaped, reconstruction[0])
                         titles = ("original", "degraded", "reconstruction")
@@ -109,8 +112,8 @@ for lam in lamb:
 
                         if method == "dps_dpms":
                             fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, k={k}, lpips={round(lpips_score.item(),2)}, time={round(DMPS_end_time-DMPS_start_time,2)}")
-                            fig.savefig(f"saved_results/outpainting_expand/dpms_dps/input/{i}_{k}_{sigma}_{n_step}.pdf", bbox_inches = 'tight')
-                        else:
+                            fig.savefig(f"saved_results/outpainting_expand/dpms_dps/{i}_{k}_{sigma}_{n_step}.pdf", bbox_inches = 'tight')
+                        
+                        elif method == "dps":
                             fig.suptitle(f"{method}, n_steps={n_step}, s={sigma}, lpips={round(lpips_score.item(),2)}, time={round(DMPS_end_time-DMPS_start_time,2)}")
-
-                        fig.savefig(f"saved_results/outpainting_expand/dps/input/{i}_{sigma}_{n_step}.pdf", bbox_inches = 'tight')
+                            fig.savefig(f"saved_results/outpainting_expand/dps/{i}_{sigma}_{n_step}.pdf", bbox_inches = 'tight')
