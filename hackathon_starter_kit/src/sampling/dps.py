@@ -5,8 +5,6 @@ import numpy as np
 from PIL import Image
 import os
 
-
-
 def dps(
     initial_noise: torch.Tensor,
     inverse_problem: Tuple,
