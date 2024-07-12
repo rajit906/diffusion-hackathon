@@ -134,7 +134,7 @@ def dps_dpms_save(initial_noise: torch.Tensor,
             
             img_pil = Image.fromarray(sample_i)
             draw = ImageDraw.Draw(img_pil)
-            font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 30)
+            font = ImageFont.truetype("./font/LiberationSans-Bold.ttf", 30)
 
 
             draw.text((0,0), f"Iter {i}\nSSIM:"+ssim_i+"\n"+"PSNR:"+psnr_i+"dB\n"+"LPIPS:"+lpips_i ,(255,255,255), font= font)
@@ -178,7 +178,7 @@ def dps_dpms_save(initial_noise: torch.Tensor,
             
             img_pil = Image.fromarray(sample_i)
             draw = ImageDraw.Draw(img_pil)
-            font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 30)
+            font = ImageFont.truetype("./font/LiberationSans-Bold.ttf", 30)
 
 
             draw.text((0,0), f"Iter {i}\nSSIM:"+ssim_i+"\n"+"PSNR:"+psnr_i+"dB\n"+"LPIPS:"+lpips_i ,(255,255,255), font= font)
