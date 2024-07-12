@@ -14,15 +14,16 @@ from local_paths import ABS_PROJECT_PATH
 import matplotlib.pyplot as plt
 
 
-def load_image(img_path, device="cpu") -> torch.Tensor:
+def load_image(img_path, device="cpu", resize = (256, 256)) -> torch.Tensor:
     """Load and image as Tensor.
 
     img_path : str or Path
         the path of the image.
     """
     image = Image.open(img_path)
+    new_image = image.resize(resize)
 
-    im = torch.tensor(np.array(image)).type(torch.FloatTensor).to(device)
+    im = torch.tensor(np.array(new_image)).type(torch.FloatTensor).to(device)
     x_origin = ((im - 127.5) / 127.5).squeeze(0)
     x_origin = x_origin.permute(2, 0, 1)
 
